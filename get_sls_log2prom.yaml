@@ -1,0 +1,57 @@
+# encoding: utf-8
+import re,sys
+import time
+import json
+import datetime
+from aliyun.log import *
+from prometheus_client import CollectorRegistry, push_to_gateway, Gauge, write_to_textfile
+
+reload(sys)
+sys.setdefaultencoding('utf8')
+
+
+endpoint = 'retention.cn-beijing-intranet.log.aliyuncs.com'       # 选择与上面步骤创建Project所属区域匹配的Endpoint
+accessKeyId = ''    # 使用你的阿里云访问密钥AccessKeyId
+accessKey = ''      # 使用你的阿里云访问密钥AccessKeySecret
+project = ''        # 上面步骤创建的项目名称
+logstore = ''       # 上面步骤创建的日志库名称
+
+Now = datetime.datetime.today()
+Start =  Now - datetime.timedelta(minutes=1)
+End =  Now
+
+StartTime = datetime.datetime.strftime(Start, '%Y-%m-%d %H:%M:00')
+EndTime = datetime.datetime.strftime(End, '%Y-%m-%d %H:%M:00')
+
+
+client = LogClient(endpoint, accessKeyId, accessKey)
+
+def get_project_log(client,project,logstore):
+        query = '''your query in sls'''
+        offset =0
+        begin =  int(time.time()) -60
+        end= int(time.time())
+        topic = ""
+        request  = GetLogsRequest(project, logstore, begin,end,topic,query,100,offset,False)
+        response = client.get_logs(request)
+        return response
+
+def push_prom():
+	registry = CollectorRegistry()
+	g = Gauge('your_metrics_name', 'uri', ['info'], registry=registry)
+
+	logs = get_project_log(client,project,logstore)
+	result = logs.get_logs()
+	for log in result:
+	    contents = [];
+	    for (k,v) in log.get_contents().items():
+	        contents.append({k:v})
+	    info_dict = {};
+	    for content in contents:
+	            info_dict = dict(info_dict,**content)
+	    value=info_dict['c']
+	    print value
+	    g.labels('your_labels_name',).set(value)
+
+	push_to_gateway('your_push_url:9091', job='your_job_name', registry=registry)
+push_prom()
